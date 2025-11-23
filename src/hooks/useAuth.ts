@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react"
+import { Gender } from "@/types/gender"
 
 interface User {
   id: string
-  email: string
   firstName: string
+  lastName: string
+  email: string
+  gender: Gender
 }
 
 export function useAuth() {
@@ -30,15 +33,20 @@ export function useAuth() {
       setError(null)
       setLoading(true)
 
-      // TODO: Replace with real backend call later
-      const mockUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        email,
-        firstName: email.split("@")[0],
+      const storedUser = localStorage.getItem("learnloop_user")
+
+      if (!storedUser) {
+        throw new Error("No account found. Please register first.")
       }
 
-      localStorage.setItem("learnloop_user", JSON.stringify(mockUser))
-      setUser(mockUser)
+      const parsedUser: User = JSON.parse(storedUser)
+
+      if (parsedUser.email !== email) {
+        throw new Error("Invalid credentials")
+      }
+
+      // Successful login
+      setUser(parsedUser)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
@@ -47,20 +55,18 @@ export function useAuth() {
     }
   }
 
-  const register = async (email: string, _password: string, firstName: string) => {
+  const register = async (newUser: Omit<User, "id">) => {
     try {
       setError(null)
       setLoading(true)
 
-      // TODO: Replace with real backend call later
-      const mockUser: User = {
+      const createdUser: User = {
         id: Math.random().toString(36).substr(2, 9),
-        email,
-        firstName,
+        ...newUser,
       }
 
-      localStorage.setItem("learnloop_user", JSON.stringify(mockUser))
-      setUser(mockUser)
+      localStorage.setItem("learnloop_user", JSON.stringify(createdUser))
+      setUser(createdUser)
 
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed")
