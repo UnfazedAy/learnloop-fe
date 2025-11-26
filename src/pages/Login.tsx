@@ -1,30 +1,46 @@
 import React, { useState } from "react"
-import { useAuth } from "@/hooks/useAuth"
+import { useAuth } from "@/contexts/AuthContext"
 import { useNavigate, Link } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Mail, Lock } from "lucide-react"
 import { Navbar } from "@/components/Navbar"
+import { Spinner } from "@/components/ui/spinner"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [loadingState, setLoadingState] = useState(false)
 
-  const { login, error } = useAuth()
+  const { login, error, loading, user } = useAuth()
   const navigate = useNavigate()
+
+  // Redirect if already logged in
+  React.useEffect(() => {
+    if (user) {
+      navigate("/dashboard", { replace: true })
+    }
+  }, [user, navigate])
+
+  if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <Spinner />
+        </div>
+      );
+    }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    setLoadingState(true)
     try {
       await login(email, password)
-      navigate("/dashboard")
+      navigate("/dashboard", { replace: true })
     } catch (err) {
-      console.error("Login error:", err)
+
     } finally {
-      setLoading(false)
+      setLoadingState(false)
     }
   }
 
@@ -39,12 +55,13 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form  onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Email</label>
+                <label htmlFor="email" className="text-sm font-medium text-foreground mb-2 block">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
+                    id="email"
                     type="email"
                     placeholder="you@example.com"
                     value={email}
@@ -56,10 +73,11 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Password</label>
+                <label htmlFor="password" className="text-sm font-medium text-foreground mb-2 block">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
+                    id="password"
                     type="password"
                     placeholder="Enter your password"
                     value={password}
@@ -72,8 +90,8 @@ export default function LoginPage() {
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
-                {loading ? "Signing in..." : "Sign In"}
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loadingState}>
+                {loadingState ? <Spinner /> : "Sign In"}
               </Button>
             </form>
 
