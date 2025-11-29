@@ -7,6 +7,7 @@ import ProtectedRoute from "@/components/ProtectedRoute"
 import DashboardPage from "@/pages/Dashboard"
 import ProfilePage from "./pages/Profile"
 import EmailVerificationCallback from "@/pages/EmailVerificationCallback"
+import GoalsPage from "./pages/Goal"
 import "./style.css"
 
 export default function App() {
@@ -31,6 +32,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/goals"
+          element={
+            <ProtectedRoute>
+              <GoalsPage />
             </ProtectedRoute>
           }
         />

@@ -8,8 +8,16 @@ import {
 import { api } from "@/lib/axios";
 import { Gender } from "@/types/index";
 import { jwtDecode } from "jwt-decode";
-
 interface User {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  gender: Gender;
+  image?: string;
+}
+
+interface UserCreate {
   id: string;
   firstName: string;
   lastName: string;
@@ -17,7 +25,6 @@ interface User {
   gender: Gender;
   image?: string;
 }
-
 interface RegisterResponse {
   success: boolean;
   message: string;
@@ -46,10 +53,11 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (newUser: Omit<User, "id"> & { password: string }) => Promise<any>;
+  register: (newUser: Omit<UserCreate, "id"> & { password: string }) => Promise<any>;
   completeRegistration: (accessToken: string) => Promise<void>;
   logout: () => void;
   getToken: () => string | null;
+  refreshUser: () => Promise<void>;
 }
 
 const isTokenExpired = (token: string | null) => {
@@ -134,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (newUser: Omit<User, "id"> & { password: string }) => {
+  const register = async (newUser: Omit<UserCreate, "id"> & { password: string }) => {
     setError(null);
     try {
       const res = await api.post<RegisterResponse>("/auth/sign-up", {
@@ -186,6 +194,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getToken = () => localStorage.getItem("learnloop_token");
 
+  const refreshUser = async () => {
+  const token = getToken()
+  if (!token) return
+
+  const res = await api.get("/user/profile", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  const profile = res.data.data
+  localStorage.setItem("learnloop_user", JSON.stringify(profile))
+  setUser(profile)
+  dispatchAuthChange()
+}
+
   return (
     <AuthContext.Provider
       value={{
@@ -197,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         completeRegistration,
         logout,
         getToken,
+        refreshUser,
       }}
     >
       {children}

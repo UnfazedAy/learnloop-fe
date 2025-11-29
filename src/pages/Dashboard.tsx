@@ -1,53 +1,69 @@
+// src/pages/DashboardPage.tsx
 import { useAuth } from "@/contexts/AuthContext"
 import { useNavigate } from "react-router-dom"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo } from "react"
 import { Navbar } from "@/components/Navbar"
 import { StatCard } from "@/components/StatCard"
 import { GoalCard } from "@/components/GoalCard"
 import { QuoteCard } from "@/components/QuoteCard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Plus, Flame, TrendingUp, Award, CheckCircle2 } from "lucide-react"
+import { Plus, Flame, TrendingUp, CheckCircle2, Award } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useGoals } from "@/hooks/useGoals"
 import { useProgress } from "@/hooks/useProgress"
-import { getTodayQuote, mockAchievements, getProgressByWeek } from "@/lib/mock-data"
+import { getTodayQuote, mockAchievements } from "@/lib/mock-data"
 
 export default function DashboardPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { goals } = useGoals()
-  const { getCompletionRate, getStreakForGoal } = useProgress()
-  const [loading, setLoading] = useState(true)
+  const { getStreakForGoal, getWeeklyProgress, getCompletionRate } = useProgress()
 
   useEffect(() => {
     if (!user) {
       navigate("/login")
-    } else {
-      setLoading(false)
     }
   }, [user, navigate])
 
-  if (loading) return null
+  // Safe: pick first active goal for chart, fallback to any goal
+  const chartGoalId = goals.find((g) => g.is_active)?.id || goals[0]?.id || ""
+  const weeklyProgress = useMemo(
+    () => (chartGoalId ? getWeeklyProgress(chartGoalId) : []),
+    [chartGoalId, getWeeklyProgress]
+  )
 
-  const weeklyProgress = getProgressByWeek(goals[0]?.id ?? "")
   const dailyQuote = getTodayQuote()
 
-  const totalStreak = goals.reduce((sum, g) => {
-    const streak = getStreakForGoal(g.id)
-    return sum + (streak?.currentStreak || 0)
-  }, 0)
+  const totalStreak = useMemo(() => {
+    return goals.reduce((sum, g) => {
+      return sum + (getStreakForGoal(g.id)?.currentStreak || 0)
+    }, 0)
+  }, [goals, getStreakForGoal])
 
-  const avgProgress = Math.round(
-    goals.reduce((sum, g) => sum + getCompletionRate(g.id), 0) / Math.max(goals.length, 1)
-  )
+  const avgProgress = useMemo(() => {
+    if (goals.length === 0) return 0
+    const total = goals.reduce((sum, g) => sum + getCompletionRate(g.id), 0)
+    return Math.round(total / goals.length)
+  }, [goals, getCompletionRate])
+
+  const activeGoalsCount = goals.filter((g) => g.is_active).length
 
   return (
     <>
       <Navbar
-        user={user ? { first_name: user.firstName, email: user.email } : null}
+        user={user || undefined}
         onLogout={() => {
           logout()
           navigate("/")
@@ -55,14 +71,14 @@ export default function DashboardPage() {
       />
 
       <div className="min-h-screen bg-background">
-        {/* Page Header */}
+        {/* Header */}
         <div className="border-b border-border bg-card/50 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
                 <p className="text-muted-foreground mt-1">
-                  Welcome back, {user?.firstName}!
+                  Welcome back, {user?.first_name}!
                 </p>
               </div>
               <Link to="/goals">
@@ -77,7 +93,7 @@ export default function DashboardPage() {
 
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Stats Grid */}
+          {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <StatCard
               title="Current Streak"
@@ -97,7 +113,7 @@ export default function DashboardPage() {
             />
             <StatCard
               title="Active Goals"
-              value={goals.filter((g) => g.isActive).length}
+              value={activeGoalsCount}
               subtitle="All on track"
               icon={CheckCircle2}
               iconBgColor="bg-secondary/10"
@@ -105,21 +121,21 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Daily Quote */}
+          {/* Quote */}
           <div className="mb-8">
             <QuoteCard quote={dailyQuote.quote} author={dailyQuote.author} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Goals Column */}
+            {/* Goals List */}
             <div className="lg:col-span-2 space-y-4">
               <h2 className="text-xl font-bold text-foreground mb-4">
                 Today's Goals
               </h2>
 
-              {goals.filter((g) => g.isActive).length > 0 ? (
+              {activeGoalsCount > 0 ? (
                 goals
-                  .filter((g) => g.isActive)
+                  .filter((g) => g.is_active)
                   .map((goal) => (
                     <GoalCard
                       key={goal.id}
@@ -137,72 +153,48 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Chart & Achievements */}
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-foreground mb-4">
-                Weekly Performance
-              </h2>
+            {/* Chart + Achievements */}
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-foreground mb-4">
+                  Weekly Performance
+                </h2>
 
-              <Card className="bg-card border-border">
-                <CardContent className="pt-6">
-                  <ChartContainer
-                    config={{
-                      completed: {
-                        label: "Completion %",
-                        color: "hsl(var(--primary))",
-                      },
-                    }}
-                    className="h-64"
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={weeklyProgress}
-                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                      >
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="var(--border)"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="day"
-                          stroke="var(--muted-foreground)"
-                          style={{ fontSize: "12px" }}
-                        />
-                        <YAxis
-                          stroke="var(--muted-foreground)"
-                          style={{ fontSize: "12px" }}
-                        />
-                        <Tooltip
-                          content={
-                            <ChartTooltip
-                              content={<ChartTooltipContent />}
-                            />
-                          }
-                        />
-                        <Bar dataKey="completed" radius={[8, 8, 0, 0]}>
-                          {weeklyProgress.map((entry, index) => {
-                            const completedValue =
-                              typeof entry.completed === "boolean"
-                                ? (entry.completed ? 100 : 0)
-                                : Number(entry.completed)
-                            return (
+                <Card className="bg-card border-border">
+                  <CardContent className="pt-6">
+                    <ChartContainer
+                      config={{
+                        completed: {
+                          label: "Completion %",
+                          color: "hsl(var(--primary))",
+                        },
+                      }}
+                      className="h-64"
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={weeklyProgress} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                          <XAxis dataKey="day" stroke="var(--muted-foreground)" style={{ fontSize: "12px" }} />
+                          <YAxis stroke="var(--muted-foreground)" style={{ fontSize: "12px" }} />
+                          <Tooltip content={<ChartTooltip content={<ChartTooltipContent />} />} />
+                          <Bar dataKey="completed" radius={[8, 8, 0, 0]}>
+                            {weeklyProgress.map((entry, index) => (
                               <Cell
                                 key={index}
                                 fill={
-                                  completedValue >= 90
-                                    ? "var(--accent)"
-                                    : "var(--primary)"
+                                  entry.completed
+                                    ? "var(--primary)"
+                                    : "var(--muted)"
                                 }
                               />
-                            )
-                          })}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+              </div>
 
               {/* Achievements */}
               <Card className="bg-card border-border">
@@ -217,9 +209,7 @@ export default function DashboardPage() {
                     >
                       <Award className="w-5 h-5 text-primary" />
                       <div className="flex-1">
-                        <span className="text-sm font-medium">
-                          {achievement.name}
-                        </span>
+                        <span className="text-sm font-medium">{achievement.name}</span>
                         <p className="text-xs text-muted-foreground">
                           {achievement.description}
                         </p>

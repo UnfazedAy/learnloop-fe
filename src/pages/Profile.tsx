@@ -12,7 +12,7 @@ import { ToastContainer, toast } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 
 export default function ProfilePage() {
-  const { user, getToken, logout } = useAuth()
+  const { user, getToken, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
@@ -68,14 +68,15 @@ export default function ProfilePage() {
       const res = await api.put(
         "/user/update-profile",
         {
-          first_name: profile.first_name,
-          last_name: profile.last_name,
+          firstName: profile.first_name,
+          lastName: profile.last_name,
         },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       )
       if (res.data.success) {
+        await refreshUser()
         toast.success("Profile updated successfully!")
       }
     } catch (err) {

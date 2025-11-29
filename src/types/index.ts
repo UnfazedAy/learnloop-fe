@@ -5,13 +5,16 @@ export enum Gender {
 
 export interface Goal {
   id: string
+  user_id: string
   title: string
   description?: string
   goalType: "time" | "completion" | "custom"
   targetValue: number
   targetUnit: string
   frequency: "daily" | "weekly" | "monthly"
-  isActive: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface ProgressEntry {
