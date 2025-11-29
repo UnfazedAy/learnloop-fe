@@ -8,11 +8,13 @@ import DashboardPage from "@/pages/Dashboard"
 import ProfilePage from "./pages/Profile"
 import EmailVerificationCallback from "@/pages/EmailVerificationCallback"
 import GoalsPage from "./pages/Goal"
+import { Toaster } from "sonner";
 import "./style.css"
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" richColors />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
