@@ -4,7 +4,7 @@ import { NavLink } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 
 interface NavbarProps {
-  user?: { firstName: string; email: string } | null
+  user?: { first_name: string; email: string } | null
   onLogout?: () => void
 }
 
@@ -40,7 +40,7 @@ export function Navbar({ user, onLogout }: NavbarProps) {
                 </NavLink>
 
                 <div className="flex items-center gap-3 pl-6 border-l border-border">
-                  <span className="text-sm text-muted-foreground">{user.firstName}</span>
+                  <span className="text-sm text-muted-foreground">{user.first_name}</span>
 
                   <NavLink to="/profile">
                     <Button variant="ghost" size="sm">
