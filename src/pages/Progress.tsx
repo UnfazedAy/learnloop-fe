@@ -2,20 +2,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Navbar } from "@/components/Navbar";
+import { api } from "@/lib/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Plus, Calendar, TrendingUp } from "lucide-react";
-import { useGoals } from "@/hooks/useGoals";
-import { useProgress } from "@/hooks/useProgress";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,431 +21,449 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
+import { Calendar, Plus, TrendingUp, Clock } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 
-type WeekRow = {
-  day: string; // short day name e.g. Mon
-  date: string; // iso date string (yyyy-mm-dd)
+interface Goal {
+  id: string;
+  title: string;
+  description: string;
+  target_value: number;
+  target_unit: string;
+  frequency: string;
+  is_active: boolean;
+}
+
+interface ProgressEntry {
+  id: string;
+  goal_id: string;
   value: number;
-  completed: boolean;
-};
-
-function shortDayFromDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
+  notes: string;
+  created_at: string;
 }
 
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10); // yyyy-mm-dd
-}
-
-function buildEmptyWeek(): WeekRow[] {
-  const result: WeekRow[] = [];
-  const today = new Date();
-  // build last 7 days (oldest -> newest)
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    const iso = isoDate(date);
-    result.push({
-      day: shortDayFromDate(iso),
-      date: iso,
-      value: 0,
-      completed: false,
-    });
-  }
-  return result;
-}
-
-/**
- * Progress Page (Clean & Minimal)
- */
 export default function ProgressPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, getToken } = useAuth();
   const navigate = useNavigate();
 
-  const { goals, loading: goalsLoading } = useGoals();
-  const { logProgress, getWeeklyStats, getCompletionRate, loading: logLoading } =
-    useProgress();
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loadingGoals, setLoadingGoals] = useState(true);
 
-  // page-level loading while we confirm auth
-  const [pageLoading, setPageLoading] = useState(true);
+  const [selectedGoalId, setSelectedGoalId] = useState<string>("");
+  const [completionRate, setCompletionRate] = useState(0);
+  const [totalDays, setTotalDays] = useState(0);
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
 
-  // selectedGoalId === null => All goals aggregated
-  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [recentProgress, setRecentProgress] = useState<ProgressEntry[]>([]);
+  const [loadingProgress, setLoadingProgress] = useState(true);
 
-  // weekly data for chart / heatmap
-  const [weeklyRows, setWeeklyRows] = useState<WeekRow[]>(buildEmptyWeek());
-  const [loadingWeekly, setLoadingWeekly] = useState(false);
+  // Log dialog
+  const [logDialogOpen, setLogDialogOpen] = useState(false);
+  const [dialogGoalId, setDialogGoalId] = useState("");
+  const [logValue, setLogValue] = useState("");
+  const [logNotes, setLogNotes] = useState("");
+  const [isLogging, setIsLogging] = useState(false);
 
-  // monthly completion rate (either aggregated or for selected goal)
-  const [completionRate, setCompletionRate] = useState<number | null>(null);
-  const [loadingCompletion, setLoadingCompletion] = useState(false);
-
-  // dialog + form state
-  const [openDialog, setOpenDialog] = useState(false);
-  const [progressValue, setProgressValue] = useState<string>("");
-  const [progressNotes, setProgressNotes] = useState<string>("");
-  const [dialogGoalId, setDialogGoalId] = useState<string | "">("");
-
-  // Redirect if not authed
   useEffect(() => {
     if (!user) {
       navigate("/login");
-      return;
     }
-    // authenticated
-    setPageLoading(false);
   }, [user, navigate]);
 
-  // When goals change, ensure dialog select options update and keep selectedGoalId unchanged.
+  // Fetch goals
   useEffect(() => {
-    // default dialog goal to first active goal only for convenience (not auto-selecting page)
-    if (!dialogGoalId && goals.length > 0) {
-      const firstActive = goals.find((g) => g.is_active === true);
-      setDialogGoalId(firstActive?.id ?? "");
-    }
-  }, [goals, dialogGoalId]);
+    const fetchGoals = async () => {
+      const token = getToken();
+      if (!token) return;
 
-  // Fetch weekly stats when selectedGoalId or goals change
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setLoadingWeekly(true);
       try {
-        // request aggregated stats when selectedGoalId === null -> pass undefined to hook
-        const rows = await getWeeklyStats(selectedGoalId ?? undefined);
-        if (!mounted) return;
-
-        // backend returns dailyProgress array with { date, totalValue, entriesCount, goalsCompleted }
-        // normalize into WeekRow[] and fill missing days (last 7 days)
-        const emptyWeek = buildEmptyWeek();
-        const mapByDate: Record<string, any> = {};
-        (rows || []).forEach((r: any) => {
-          // accept either date or day fields, but your backend provides date strings
-          const d = r.date ? r.date.slice(0, 10) : null;
-          if (d) mapByDate[d] = r;
+        const res = await api.get("/goals", {
+          headers: { Authorization: `Bearer ${token}` },
         });
-
-        const normalized = emptyWeek.map((cell) => {
-          const backendRow = mapByDate[cell.date];
-          if (!backendRow) return cell;
-          const value = backendRow.totalValue ?? 0;
-          const completed = (backendRow.goalsCompleted ?? 0) > 0;
-          return {
-            ...cell,
-            value,
-            completed,
-          };
-        });
-
-        setWeeklyRows(normalized);
-      } catch (err) {
-        console.error("Failed to load weekly stats", err);
-        toast.error("Failed to load weekly stats");
-        setWeeklyRows(buildEmptyWeek());
-      } finally {
-        if (mounted) setLoadingWeekly(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [selectedGoalId, goals, getWeeklyStats]);
-
-  // Fetch completion rate (month). If selectedGoalId === null, average across goals
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setLoadingCompletion(true);
-      try {
-        if (selectedGoalId) {
-          const r = await getCompletionRate(selectedGoalId);
-          if (!mounted) return;
-          setCompletionRate(Math.round(r));
-        } else {
-          // No goal selected: average across goals
-          if (!goals || goals.length === 0) {
-            setCompletionRate(0);
-          } else {
-            const rates = await Promise.all(goals.map((g) => getCompletionRate(g.id)));
-            if (!mounted) return;
-            const sum = rates.reduce((s, v) => s + (v || 0), 0);
-            setCompletionRate(Math.round(sum / Math.max(1, goals.length)));
-          }
+        const goalsData = res.data.data || [];
+        setGoals(goalsData);
+        
+        // Set first active goal as default for dialog
+        if (goalsData.length > 0) {
+          const firstActive = goalsData.find((g: Goal) => g.is_active);
+          if (firstActive) setDialogGoalId(firstActive.id);
         }
       } catch (err) {
-        console.error("Failed to load completion rate", err);
-        toast.error("Failed to load monthly stats");
-        setCompletionRate(0);
+        console.error("Failed to fetch goals:", err);
       } finally {
-        if (mounted) setLoadingCompletion(false);
+        setLoadingGoals(false);
       }
-    })();
-
-    return () => {
-      mounted = false;
     };
-  }, [selectedGoalId, goals, getCompletionRate]);
 
-  if (pageLoading || goalsLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Spinner />
-      </div>
-    );
-  }
+    fetchGoals();
+  }, [getToken]);
 
-  const activeGoals = goals.filter((g) => g.is_active === true);
-  const currentGoal = goals.find((g) => g.id === selectedGoalId) ?? null;
+  // Fetch stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      const token = getToken();
+      if (!token) return;
 
-  // handle logging progress
-  const handleAddProgress = async () => {
-    // ensure a goal is selected inside the dialog (progress requires a goal)
-    const goalToUse = dialogGoalId || selectedGoalId;
-    if (!goalToUse) {
-      toast.error("Select a goal to log progress");
+      setLoadingStats(true);
+
+      try {
+        const params: any = { period: "month" };
+        if (selectedGoalId) params.goalId = selectedGoalId;
+
+        const res = await api.get("/progress/stats", {
+          headers: { Authorization: `Bearer ${token}` },
+          params,
+        });
+
+        const data = res.data.data;
+        setCompletionRate(data?.completionRate || 0);
+        setTotalDays(data?.totalDaysTracked || 0);
+        setTotalEntries(data?.totalEntries || 0);
+      } catch (err) {
+        console.error("Failed to fetch stats:", err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
+    fetchStats();
+  }, [getToken, selectedGoalId]);
+
+  // Fetch recent progress entries
+  useEffect(() => {
+    const fetchRecentProgress = async () => {
+      const token = getToken();
+      if (!token) return;
+
+      setLoadingProgress(true);
+
+      try {
+        const params: any = { limit: 10 };
+        if (selectedGoalId) params.goalId = selectedGoalId;
+
+        const res = await api.get("/progress", {
+          headers: { Authorization: `Bearer ${token}` },
+          params,
+        });
+
+        setRecentProgress(res.data.data || []);
+      } catch (err) {
+        console.error("Failed to fetch progress:", err);
+        setRecentProgress([]);
+      } finally {
+        setLoadingProgress(false);
+      }
+    };
+
+    fetchRecentProgress();
+  }, [getToken, selectedGoalId]);
+
+  const handleLogProgress = async () => {
+    if (!dialogGoalId || !logValue) {
+      alert("Please select a goal and enter a value");
       return;
     }
 
-    if (!progressValue || isNaN(Number(progressValue)) || Number(progressValue) <= 0) {
-      toast.error("Enter a valid number for value");
-      return;
-    }
+    const token = getToken();
+    if (!token) return;
+
+    setIsLogging(true);
 
     try {
-      const res = await logProgress(goalToUse, Number(progressValue), progressNotes);
-      toast.success(res?.message || "Progress logged successfully");
-      // clear form
-      setProgressValue("");
-      setProgressNotes("");
-      setOpenDialog(false);
-
-      // refresh weekly + completion rate for the currently selected view
-      const rows = await getWeeklyStats(selectedGoalId ?? undefined);
-      // re-normalize same as effect
-      const emptyWeek = buildEmptyWeek();
-      const mapByDate: Record<string, any> = {};
-      (rows || []).forEach((r: any) => {
-        const d = r.date ? r.date.slice(0, 10) : null;
-        if (d) mapByDate[d] = r;
-      });
-      const normalized = emptyWeek.map((cell) => {
-        const backendRow = mapByDate[cell.date];
-        if (!backendRow) return cell;
-        const value = backendRow.totalValue ?? 0;
-        const completed = (backendRow.goalsCompleted ?? 0) > 0;
-        return { ...cell, value, completed };
-      });
-      setWeeklyRows(normalized);
-
-      // refresh completion rate
-      if (selectedGoalId) {
-        const r = await getCompletionRate(selectedGoalId);
-        setCompletionRate(Math.round(r));
-      } else {
-        // average across goals
-        if (goals.length > 0) {
-          const rates = await Promise.all(goals.map((g) => getCompletionRate(g.id)));
-          const sum = rates.reduce((s, v) => s + (v || 0), 0);
-          setCompletionRate(Math.round(sum / Math.max(1, goals.length)));
+      await api.post(
+        `/progress/${dialogGoalId}`,
+        {
+          value: parseFloat(logValue),
+          notes: logNotes || undefined,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-      }
-    } catch (err: any) {
-      console.error("logProgress error", err);
-      toast.error(err?.response?.data?.message || "Failed to log progress");
+      );
+
+      // Close dialog
+      setLogDialogOpen(false);
+      setLogValue("");
+      setLogNotes("");
+
+      // Refresh stats
+      const params: any = { period: "month" };
+      if (selectedGoalId) params.goalId = selectedGoalId;
+
+      const statsRes = await api.get("/progress/stats", {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+
+      const data = statsRes.data.data;
+      setCompletionRate(data?.completionRate || 0);
+      setTotalDays(data?.totalDaysTracked || 0);
+      setTotalEntries(data?.totalEntries || 0);
+
+      // Refresh recent progress
+      const progressParams: any = { limit: 10 };
+      if (selectedGoalId) progressParams.goalId = selectedGoalId;
+
+      const progressRes = await api.get("/progress", {
+        headers: { Authorization: `Bearer ${token}` },
+        params: progressParams,
+      });
+
+      setRecentProgress(progressRes.data.data || []);
+
+      alert("Progress logged successfully!");
+    } catch (err) {
+      console.error("Failed to log progress:", err);
+      alert("Failed to log progress. Please try again.");
+    } finally {
+      setIsLogging(false);
     }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getGoalTitle = (goalId: string) => {
+    const goal = goals.find((g) => g.id === goalId);
+    return goal?.title || "Unknown Goal";
   };
 
   return (
     <>
       <Navbar
-        user={user}
+        user={user || undefined}
         onLogout={() => {
           logout();
-          toast.success("Logged out");
           navigate("/");
         }}
       />
 
       <div className="min-h-screen bg-background">
         {/* Header */}
-        <div className="border-b border-border bg-card/50 backdrop-blur-sm">
+        <div className="border-b border-border bg-card/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-semibold text-foreground">Progress</h1>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  Track your learning sessions and visualize weekly progress.
+                <h1 className="text-2xl sm:text-3xl font-bold">Progress</h1>
+                <p className="text-muted-foreground mt-1">
+                  Track your progress and view your history
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                {/* goal selector */}
-                <div className="flex items-center gap-2">
-                  <label className="sr-only">Goal</label>
-                  <select
-                    value={selectedGoalId ?? ""}
-                    onChange={(e) => setSelectedGoalId(e.target.value || null)}
-                    className="border border-border rounded-md px-3 py-2 bg-white text-sm"
-                    aria-label="Select goal"
-                  >
-                    <option value="">All goals</option>
-                    {goals.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="flex flex-col gap-3">
+                <label htmlFor="goal-select" className="sr-only">
+                  Select a goal
+                </label>
+                <select
+                  id="goal-select"
+                  value={selectedGoalId}
+                  onChange={(e) => setSelectedGoalId(e.target.value)}
+                  className="border rounded-md px-3 py-2 bg-white"
+                  disabled={loadingGoals}
+                >
+                  <option value="">All Goals</option>
+                  {goals.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.title}
+                    </option>
+                  ))}
+                </select>
 
-                <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                  <DialogTrigger asChild>
-                    <Button className="gap-2">
-                      <Plus className="w-4 h-4" />
-                      Log Progress
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Log Progress</DialogTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Log time or completion for a goal.
-                      </p>
-                    </DialogHeader>
-
-                    <div className="space-y-4 mt-2">
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Goal</label>
-                        <Select value={dialogGoalId} onValueChange={(v) => setDialogGoalId(v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a goal" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {goals.map((g) => (
-                              <SelectItem key={g.id} value={g.id}>
-                                {g.title}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Value</label>
-                        <Input
-                          type="number"
-                          placeholder="e.g., 2 (hours or count depending on goal)"
-                          value={progressValue}
-                          onChange={(e) => setProgressValue(e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium mb-1 block">Notes (optional)</label>
-                        <Input
-                          placeholder="How did it go?"
-                          value={progressNotes}
-                          onChange={(e) => setProgressNotes(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <DialogFooter>
-                      <div className="w-full">
-                        <Button
-                          onClick={handleAddProgress}
-                          className="w-full"
-                          disabled={logLoading}
-                        >
-                          {logLoading ? <Spinner /> : "Save progress"}
-                        </Button>
-                      </div>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                <Button
+                  className="gap-2 w-full sm:w-auto"
+                  onClick={() => setLogDialogOpen(true)}
+                >
+                  <Plus className="w-4 h-4" />
+                  Log Progress
+                </Button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Content */}
+        {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Monthly Stats */}
+          {/* Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Monthly Stats
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Completion Rate</p>
-                    <p className="text-3xl font-semibold">
-                      {loadingCompletion ? <Spinner /> : `${completionRate ?? 0}%`}
-                    </p>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-500/10 rounded-lg">
+                    <Calendar className="w-6 h-6 text-purple-500" />
                   </div>
-
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Active Goals</p>
-                    <p className="text-3xl font-semibold">
-                      {activeGoals.length}
+                    <p className="text-sm text-muted-foreground">Days Tracked</p>
+                    <p className="text-2xl font-bold">
+                      {loadingStats ? "..." : totalDays}
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Weekly Stats */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  This Week {currentGoal ? `- ${currentGoal.title}` : ""}
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>
-                {/* heatmap row */}
-                <div className="grid grid-cols-7 gap-2 items-end">
-                  {weeklyRows.map((d) => (
-                    <div key={d.date} className="flex flex-col items-center">
-                      <div
-                        className={`w-full rounded-md transition-all duration-150 flex items-end justify-center`}
-                        style={{
-                          height: `${Math.min(100, Math.max(12, (d.value / (Math.max(...weeklyRows.map(r => r.value)) || 1)) * 100))}px`,
-                          backgroundColor: d.completed ? "var(--primary)" : "var(--muted)",
-                          opacity: d.value > 0 ? 1 : 0.28,
-                        }}
-                        title={`${d.day} — ${d.value}`}
-                      />
-                      <div className="mt-2 text-xs text-muted-foreground">{d.day}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {loadingWeekly && (
-                  <div className="mt-4 flex justify-center">
-                    <Spinner />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-green-500/10 rounded-lg">
+                    <TrendingUp className="w-6 h-6 text-green-500" />
                   </div>
-                )}
+                  <div>
+                    <p className="text-sm text-muted-foreground">Completion Rate</p>
+                    <p className="text-2xl font-bold">
+                      {loadingStats ? "..." : `${completionRate}%`}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                {!loadingWeekly && weeklyRows.every((r) => r.value === 0) && (
-                  <p className="text-sm text-muted-foreground mt-4">
-                    No progress recorded this week. Log your first session to get started.
-                  </p>
-                )}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-500/10 rounded-lg">
+                    <Clock className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Entries</p>
+                    <p className="text-2xl font-bold">
+                      {loadingStats ? "..." : totalEntries}
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
+
+          {/* Recent Progress */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingProgress ? (
+                <div className="flex justify-center py-8">
+                  <Spinner />
+                </div>
+              ) : recentProgress.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    No progress entries yet. Log your first progress to get started!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentProgress.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium mb-1">
+                          {getGoalTitle(entry.goal_id)}
+                        </p>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Value: <span className="font-medium">{entry.value}</span>
+                        </p>
+                        {entry.notes && (
+                          <p className="text-sm text-muted-foreground italic">
+                            "{entry.notes}"
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right text-sm text-muted-foreground ml-4">
+                        {formatDate(entry.created_at)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      {/* Log Progress Dialog */}
+      <Dialog open={logDialogOpen} onOpenChange={setLogDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Log Progress</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium block mb-2">Goal</label>
+              <Select value={dialogGoalId} onValueChange={setDialogGoalId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a goal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {goals.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label htmlFor="value" className="text-sm font-medium block mb-2">
+                Value
+              </label>
+              <Input
+                id="value"
+                type="number"
+                placeholder="Enter progress value"
+                value={logValue}
+                onChange={(e) => setLogValue(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="notes" className="text-sm font-medium block mb-2">
+                Notes (optional)
+              </label>
+              <Textarea
+                id="notes"
+                placeholder="How did it go?"
+                value={logNotes}
+                onChange={(e) => setLogNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLogDialogOpen(false);
+                setLogValue("");
+                setLogNotes("");
+              }}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLogProgress}
+              disabled={!logValue || isLogging}
+              className="w-full sm:w-auto"
+            >
+              {isLogging ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
