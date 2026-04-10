@@ -1,16 +1,19 @@
-import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Calendar, Plus, TrendingUp, Clock, Target } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { useGoals } from "@/hooks/useGoals";
+import { useProgress } from "@/hooks/useProgress";
 import { Navbar } from "@/components/Navbar";
-import { api } from "@/lib/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,49 +24,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar, Plus, TrendingUp, Clock } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 
-interface Goal {
-  id: string;
-  title: string;
-  description: string;
-  target_value: number;
-  target_unit: string;
-  frequency: string;
-  is_active: boolean;
-}
-
-interface ProgressEntry {
-  id: string;
-  goal_id: string;
-  value: number;
-  notes: string;
-  created_at: string;
-}
-
 export default function ProgressPage() {
-  const { user, logout, getToken } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [loadingGoals, setLoadingGoals] = useState(true);
-
-  const [selectedGoalId, setSelectedGoalId] = useState<string>("");
-  const [completionRate, setCompletionRate] = useState(0);
-  const [totalDays, setTotalDays] = useState(0);
-  const [totalEntries, setTotalEntries] = useState(0);
-  const [loadingStats, setLoadingStats] = useState(true);
-
-  const [recentProgress, setRecentProgress] = useState<ProgressEntry[]>([]);
-  const [loadingProgress, setLoadingProgress] = useState(true);
-
-  // Log dialog
+  const [selectedGoalId, setSelectedGoalId] = useState("");
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [dialogGoalId, setDialogGoalId] = useState("");
   const [logValue, setLogValue] = useState("");
   const [logNotes, setLogNotes] = useState("");
-  const [isLogging, setIsLogging] = useState(false);
+  const { goals, loading: loadingGoals } = useGoals();
+  const {
+    completionRate,
+    totalDaysTracked,
+    totalEntries,
+    goalSummaries,
+    recentEntries,
+    loadingStats,
+    loadingRecentEntries,
+    loading: isLogging,
+    error: progressError,
+    logProgress,
+  } = useProgress({
+    goalId: selectedGoalId || undefined,
+    period: "month",
+    includeRecentEntries: true,
+    recentLimit: 10,
+    recentDateRange: "month",
+  });
 
   useEffect(() => {
     if (!user) {
@@ -71,169 +60,36 @@ export default function ProgressPage() {
     }
   }, [user, navigate]);
 
-  // Fetch goals
   useEffect(() => {
-    const fetchGoals = async () => {
-      const token = getToken();
-      if (!token) return;
-
-      try {
-        const res = await api.get("/goals", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const goalsData = res.data.data || [];
-        setGoals(goalsData);
-        
-        // Set first active goal as default for dialog
-        if (goalsData.length > 0) {
-          const firstActive = goalsData.find((g: Goal) => g.is_active);
-          if (firstActive) setDialogGoalId(firstActive.id);
-        }
-      } catch (err) {
-        console.error("Failed to fetch goals:", err);
-      } finally {
-        setLoadingGoals(false);
+    if (goals.length > 0 && !dialogGoalId) {
+      const firstActive = goals.find((goal) => goal.is_active);
+      if (firstActive) {
+        setDialogGoalId(firstActive.id);
       }
-    };
-
-    fetchGoals();
-  }, [getToken]);
-
-  // Fetch stats
-  useEffect(() => {
-    const fetchStats = async () => {
-      const token = getToken();
-      if (!token) return;
-
-      setLoadingStats(true);
-
-      try {
-        const params: any = { period: "month" };
-        if (selectedGoalId) params.goalId = selectedGoalId;
-
-        const res = await api.get("/progress/stats", {
-          headers: { Authorization: `Bearer ${token}` },
-          params,
-        });
-
-        const data = res.data.data;
-        setCompletionRate(data?.completionRate || 0);
-        setTotalDays(data?.totalDaysTracked || 0);
-        setTotalEntries(data?.totalEntries || 0);
-      } catch (err) {
-        console.error("Failed to fetch stats:", err);
-      } finally {
-        setLoadingStats(false);
-      }
-    };
-
-    fetchStats();
-  }, [getToken, selectedGoalId]);
-
-  // Fetch recent progress entries
-  useEffect(() => {
-    const fetchRecentProgress = async () => {
-      const token = getToken();
-      if (!token) return;
-
-      setLoadingProgress(true);
-
-      try {
-        const params: any = { limit: 10 };
-        if (selectedGoalId) params.goalId = selectedGoalId;
-
-        const res = await api.get("/progress", {
-          headers: { Authorization: `Bearer ${token}` },
-          params,
-        });
-
-        setRecentProgress(res.data.data || []);
-      } catch (err) {
-        console.error("Failed to fetch progress:", err);
-        setRecentProgress([]);
-      } finally {
-        setLoadingProgress(false);
-      }
-    };
-
-    fetchRecentProgress();
-  }, [getToken, selectedGoalId]);
+    }
+  }, [dialogGoalId, goals]);
 
   const handleLogProgress = async () => {
     if (!dialogGoalId || !logValue) {
-      alert("Please select a goal and enter a value");
+      toast.error("Please select a goal and enter a value.");
       return;
     }
 
-    const token = getToken();
-    if (!token) return;
+    const result = await logProgress(dialogGoalId, parseFloat(logValue), logNotes);
 
-    setIsLogging(true);
-
-    try {
-      await api.post(
-        `/progress/${dialogGoalId}`,
-        {
-          value: parseFloat(logValue),
-          notes: logNotes || undefined,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      // Close dialog
+    if (result) {
       setLogDialogOpen(false);
       setLogValue("");
       setLogNotes("");
-
-      // Refresh stats
-      const params: any = { period: "month" };
-      if (selectedGoalId) params.goalId = selectedGoalId;
-
-      const statsRes = await api.get("/progress/stats", {
-        headers: { Authorization: `Bearer ${token}` },
-        params,
-      });
-
-      const data = statsRes.data.data;
-      setCompletionRate(data?.completionRate || 0);
-      setTotalDays(data?.totalDaysTracked || 0);
-      setTotalEntries(data?.totalEntries || 0);
-
-      // Refresh recent progress
-      const progressParams: any = { limit: 10 };
-      if (selectedGoalId) progressParams.goalId = selectedGoalId;
-
-      const progressRes = await api.get("/progress", {
-        headers: { Authorization: `Bearer ${token}` },
-        params: progressParams,
-      });
-
-      setRecentProgress(progressRes.data.data || []);
-
-      alert("Progress logged successfully!");
-    } catch (err) {
-      console.error("Failed to log progress:", err);
-      alert("Failed to log progress. Please try again.");
-    } finally {
-      setIsLogging(false);
+      toast.success("Progress logged successfully.");
+      return;
     }
-  };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    toast.error(progressError || "Failed to log progress. Please try again.");
   };
 
   const getGoalTitle = (goalId: string) => {
-    const goal = goals.find((g) => g.id === goalId);
+    const goal = goals.find((item) => item.id === goalId);
     return goal?.title || "Unknown Goal";
   };
 
@@ -248,7 +104,6 @@ export default function ProgressPage() {
       />
 
       <div className="min-h-screen bg-background">
-        {/* Header */}
         <div className="border-b border-border bg-card/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -271,9 +126,9 @@ export default function ProgressPage() {
                   disabled={loadingGoals}
                 >
                   <option value="">All Goals</option>
-                  {goals.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.title}
+                  {goals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.title}
                     </option>
                   ))}
                 </select>
@@ -290,9 +145,7 @@ export default function ProgressPage() {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <Card>
               <CardContent className="p-6">
@@ -303,7 +156,7 @@ export default function ProgressPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Days Tracked</p>
                     <p className="text-2xl font-bold">
-                      {loadingStats ? "..." : totalDays}
+                      {loadingStats ? "..." : totalDaysTracked}
                     </p>
                   </div>
                 </div>
@@ -343,44 +196,97 @@ export default function ProgressPage() {
             </Card>
           </div>
 
-          {/* Recent Progress */}
           <Card>
             <CardHeader>
-              <CardTitle>Recent Progress</CardTitle>
+              <CardTitle>Goal Progress Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              {loadingProgress ? (
+              {loadingStats ? (
                 <div className="flex justify-center py-8">
                   <Spinner />
                 </div>
-              ) : recentProgress.length === 0 ? (
+              ) : goalSummaries.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">
-                    No progress entries yet. Log your first progress to get started!
+                    No stats available yet. Log progress to start seeing goal summaries.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {recentProgress.map((entry) => (
+                  {goalSummaries.map((entry) => (
+                    <div
+                      key={entry.goalId}
+                      className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Target className="w-4 h-4 text-primary" />
+                          <p className="font-medium">
+                            {entry.goalTitle || getGoalTitle(entry.goalId)}
+                          </p>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Current period progress:{" "}
+                          <span className="font-medium">
+                            {entry.currentPeriodProgress} {entry.targetUnit}
+                          </span>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Average logged value:{" "}
+                          <span className="font-medium">{entry.averageValue}</span>
+                        </p>
+                      </div>
+                      <div className="text-right text-sm text-muted-foreground ml-4">
+                        {entry.currentProgressPercentage}% of target
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle>Recent Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingRecentEntries ? (
+                <div className="flex justify-center py-8">
+                  <Spinner />
+                </div>
+              ) : recentEntries.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    No recent entries yet. Log progress to start building history.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentEntries.map((entry) => (
                     <div
                       key={entry.id}
                       className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex-1">
-                        <p className="font-medium mb-1">
-                          {getGoalTitle(entry.goal_id)}
-                        </p>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Value: <span className="font-medium">{entry.value}</span>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Target className="w-4 h-4 text-primary" />
+                          <p className="font-medium">
+                            {entry.goal?.title || getGoalTitle(entry.goalId)}
+                          </p>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          Logged value: <span className="font-medium">{entry.value}</span>
+                          {entry.goal?.targetUnit ? ` ${entry.goal.targetUnit}` : ""}
                         </p>
                         {entry.notes && (
                           <p className="text-sm text-muted-foreground italic">
-                            "{entry.notes}"
+                            {entry.notes}
                           </p>
                         )}
                       </div>
                       <div className="text-right text-sm text-muted-foreground ml-4">
-                        {formatDate(entry.created_at)}
+                        {entry.date}
                       </div>
                     </div>
                   ))}
@@ -391,7 +297,6 @@ export default function ProgressPage() {
         </div>
       </div>
 
-      {/* Log Progress Dialog */}
       <Dialog open={logDialogOpen} onOpenChange={setLogDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -406,9 +311,9 @@ export default function ProgressPage() {
                   <SelectValue placeholder="Select a goal" />
                 </SelectTrigger>
                 <SelectContent>
-                  {goals.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>
-                      {g.title}
+                  {goals.map((goal) => (
+                    <SelectItem key={goal.id} value={goal.id}>
+                      {goal.title}
                     </SelectItem>
                   ))}
                 </SelectContent>

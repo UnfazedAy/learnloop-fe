@@ -1,60 +1,53 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, Flame, Plus, Target, TrendingUp, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useGoals } from "@/hooks/useGoals";
+import { useProgress } from "@/hooks/useProgress";
 import { Navbar } from "@/components/Navbar";
-import { api } from "@/lib/axios";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Target, Eye, Plus, TrendingUp, Flame, CheckCircle2 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
+import type { Goal } from "@/types";
 
-interface Goal {
-  id: string;
-  title: string;
-  description: string;
-  target_value: number;
-  target_unit: string;
-  frequency: string;
-  is_active: boolean;
-}
-
-interface GoalProgress {
+type GoalProgress = {
   goalId: string;
   todayProgress: number;
   percentComplete: number;
-}
+};
 
 export default function DashboardPage() {
-  const { user, logout, getToken } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [loadingGoals, setLoadingGoals] = useState(true);
-  
-  const [completionRate, setCompletionRate] = useState(0);
-  const [totalDays, setTotalDays] = useState(0);
-  const [loadingStats, setLoadingStats] = useState(true);
-
-  const [selectedGoalId, setSelectedGoalId] = useState<string>("");
-  const [goalProgressMap, setGoalProgressMap] = useState<Record<string, GoalProgress>>({});
-
-  // Log dialog
+  const [selectedGoalId, setSelectedGoalId] = useState("");
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [logValue, setLogValue] = useState("");
   const [logNotes, setLogNotes] = useState("");
-  const [isLogging, setIsLogging] = useState(false);
+  const { goals, loading: loadingGoals } = useGoals();
+  const {
+    completionRate,
+    totalDaysTracked,
+    goalSummaries,
+    loadingStats,
+    loading: isLogging,
+    error: progressError,
+    logProgress,
+  } = useProgress({
+    goalId: selectedGoalId || undefined,
+    period: "week",
+  });
 
   useEffect(() => {
     if (!user) {
@@ -62,137 +55,46 @@ export default function DashboardPage() {
     }
   }, [user, navigate]);
 
-  // Fetch goals on mount
-  useEffect(() => {
-    const fetchGoals = async () => {
-      const token = getToken();
-      if (!token) return;
+  const goalProgressMap = useMemo(
+    () =>
+      Object.fromEntries(
+        goalSummaries.map((item) => [
+          item.goalId,
+          {
+            goalId: item.goalId,
+            todayProgress: item.currentPeriodProgress,
+            percentComplete: item.currentProgressPercentage,
+          } satisfies GoalProgress,
+        ])
+      ) as Record<string, GoalProgress>,
+    [goalSummaries]
+  );
 
-      try {
-        const res = await api.get("/goals", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setGoals(res.data.data || []);
-      } catch (err) {
-        console.error("Failed to fetch goals:", err);
-      } finally {
-        setLoadingGoals(false);
-      }
-    };
-
-    fetchGoals();
-  }, [getToken]);
-
-  // Fetch stats and goal progress
-  useEffect(() => {
-    const fetchStats = async () => {
-      const token = getToken();
-      if (!token) return;
-
-      try {
-        const params: any = { period: "week" };
-        if (selectedGoalId) params.goalId = selectedGoalId;
-
-        const res = await api.get("/progress/stats", {
-          headers: { Authorization: `Bearer ${token}` },
-          params,
-        });
-
-        const data = res.data.data;
-        setCompletionRate(data?.completionRate || 0);
-        setTotalDays(data?.totalDaysTracked || 0);
-
-        // Build progress map from goalBreakdown
-        const breakdown = data?.goalBreakdown || {};
-        const progressMap: Record<string, GoalProgress> = {};
-        
-        Object.keys(breakdown).forEach((goalId) => {
-          const info = breakdown[goalId];
-          progressMap[goalId] = {
-            goalId,
-            todayProgress: info.averageValue || 0,
-            percentComplete: info.completionRate || 0,
-          };
-        });
-
-        setGoalProgressMap(progressMap);
-      } catch (err) {
-        console.error("Failed to fetch stats:", err);
-      } finally {
-        setLoadingStats(false);
-      }
-    };
-
-    fetchStats();
-  }, [getToken, selectedGoalId]);
+  const activeGoals = goals.filter((goal) => goal.is_active);
+  const displayedGoals = selectedGoalId
+    ? activeGoals.filter((goal) => goal.id === selectedGoalId)
+    : activeGoals;
 
   const handleLogProgress = async () => {
     if (!selectedGoal || !logValue) return;
 
-    const token = getToken();
-    if (!token) return;
+    const result = await logProgress(
+      selectedGoal.id,
+      parseFloat(logValue),
+      logNotes
+    );
 
-    setIsLogging(true);
-
-    try {
-      await api.post(
-        `/progress/${selectedGoal.id}`,
-        {
-          value: parseFloat(logValue),
-          notes: logNotes || undefined,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      // Close dialog
+    if (result) {
       setLogDialogOpen(false);
       setLogValue("");
       setLogNotes("");
       setSelectedGoal(null);
-
-      // Refresh stats
-      const params: any = { period: "week" };
-      if (selectedGoalId) params.goalId = selectedGoalId;
-
-      const res = await api.get("/progress/stats", {
-        headers: { Authorization: `Bearer ${token}` },
-        params,
-      });
-
-      const data = res.data.data;
-      setCompletionRate(data?.completionRate || 0);
-      setTotalDays(data?.totalDaysTracked || 0);
-
-      // Update progress map
-      const breakdown = data?.goalBreakdown || {};
-      const progressMap: Record<string, GoalProgress> = {};
-      
-      Object.keys(breakdown).forEach((goalId) => {
-        const info = breakdown[goalId];
-        progressMap[goalId] = {
-          goalId,
-          todayProgress: info.averageValue || 0,
-          percentComplete: info.completionRate || 0,
-        };
-      });
-
-      setGoalProgressMap(progressMap);
-
-      alert("Progress logged successfully!");
-    } catch (err) {
-      console.error("Failed to log progress:", err);
-      alert("Failed to log progress. Please try again.");
-    } finally {
-      setIsLogging(false);
+      toast.success("Progress logged successfully.");
+      return;
     }
-  };
 
-  const activeGoals = goals.filter((g) => g.is_active);
-  const displayedGoals = selectedGoalId 
-    ? activeGoals.filter(g => g.id === selectedGoalId)
-    : activeGoals;
+    toast.error(progressError || "Failed to log progress. Please try again.");
+  };
 
   return (
     <>
@@ -205,7 +107,6 @@ export default function DashboardPage() {
       />
 
       <div className="min-h-screen bg-background">
-        {/* Header */}
         <div className="border-b border-border bg-card/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -216,7 +117,7 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 ">
+              <div className="flex items-center gap-3">
                 <select
                   aria-label="Filter goals"
                   value={selectedGoalId}
@@ -225,9 +126,9 @@ export default function DashboardPage() {
                   disabled={loadingGoals}
                 >
                   <option value="">All Goals</option>
-                  {goals.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.title}
+                  {goals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.title}
                     </option>
                   ))}
                 </select>
@@ -243,9 +144,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <Card>
               <CardContent className="p-6">
@@ -256,7 +155,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Days Tracked</p>
                     <p className="text-2xl font-bold">
-                      {loadingStats ? "..." : totalDays}
+                      {loadingStats ? "..." : totalDaysTracked}
                     </p>
                   </div>
                 </div>
@@ -294,7 +193,6 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Goals Section */}
           <div>
             <h2 className="text-xl font-bold mb-4">
               {selectedGoalId ? "Selected Goal" : "Your Goals"}
@@ -308,7 +206,7 @@ export default function DashboardPage() {
               <Card>
                 <CardContent className="py-12 text-center">
                   <p className="text-muted-foreground mb-4">
-                    {selectedGoalId 
+                    {selectedGoalId
                       ? "Goal not found or inactive."
                       : "No active goals yet. Create your first goal to get started!"}
                   </p>
@@ -322,9 +220,9 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {displayedGoals.map((goal) => {
-                  const progress = goalProgressMap[goal.id] || { 
-                    todayProgress: 0, 
-                    percentComplete: 0 
+                  const progress = goalProgressMap[goal.id] || {
+                    todayProgress: 0,
+                    percentComplete: 0,
                   };
 
                   return (
@@ -340,12 +238,12 @@ export default function DashboardPage() {
                               {goal.description}
                             </p>
 
-                            {/* Progress Bar */}
                             <div className="space-y-2 mb-4">
                               <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Progress</span>
                                 <span className="font-medium">
-                                  {progress.todayProgress} / {goal.target_value} {goal.target_unit}
+                                  {progress.todayProgress} / {goal.targetValue}{" "}
+                                  {goal.targetUnit}
                                 </span>
                               </div>
                               <Progress value={progress.percentComplete} className="h-2" />
@@ -357,7 +255,9 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-                          <span>Target: {goal.target_value} {goal.target_unit}</span>
+                          <span>
+                            Target: {goal.targetValue} {goal.targetUnit}
+                          </span>
                           <span>•</span>
                           <span className="capitalize">{goal.frequency}</span>
                         </div>
@@ -390,7 +290,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Log Progress Dialog */}
       <Dialog open={logDialogOpen} onOpenChange={setLogDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -401,19 +300,17 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium mb-1">Goal</p>
-                <p className="text-sm text-muted-foreground">
-                  {selectedGoal.title}
-                </p>
+                <p className="text-sm text-muted-foreground">{selectedGoal.title}</p>
               </div>
 
               <div>
                 <label htmlFor="value" className="text-sm font-medium block mb-2">
-                  Value ({selectedGoal.target_unit})
+                  Value ({selectedGoal.targetUnit})
                 </label>
                 <Input
                   id="value"
                   type="number"
-                  placeholder={`e.g., ${selectedGoal.target_value}`}
+                  placeholder={`e.g., ${selectedGoal.targetValue}`}
                   value={logValue}
                   onChange={(e) => setLogValue(e.target.value)}
                 />
