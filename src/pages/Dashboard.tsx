@@ -2,7 +2,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Navbar } from "@/components/Navbar";
-import { api } from "@/lib/axios";
+import {
+  fetchGoalsRequest,
+  fetchProgressStatsRequest,
+  logProgressRequest,
+  type GoalBreakdownItem,
+} from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -34,6 +39,18 @@ interface GoalProgress {
   todayProgress: number;
   percentComplete: number;
 }
+
+const buildProgressMap = (goalBreakdown: Record<string, GoalBreakdownItem>) =>
+  Object.fromEntries(
+    Object.entries(goalBreakdown).map(([goalId, item]) => [
+      goalId,
+      {
+        goalId,
+        todayProgress: item.averageValue,
+        percentComplete: item.completionRate,
+      },
+    ])
+  ) as Record<string, GoalProgress>;
 
 export default function DashboardPage() {
   const { user, logout, getToken } = useAuth();
@@ -69,10 +86,18 @@ export default function DashboardPage() {
       if (!token) return;
 
       try {
-        const res = await api.get("/goals", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setGoals(res.data.data || []);
+        const goalData = await fetchGoalsRequest(token);
+        setGoals(
+          goalData.map((goal) => ({
+            id: goal.id,
+            title: goal.title,
+            description: goal.description || "",
+            target_value: goal.targetValue,
+            target_unit: goal.targetUnit,
+            frequency: goal.frequency,
+            is_active: goal.is_active,
+          }))
+        );
       } catch (err) {
         console.error("Failed to fetch goals:", err);
       } finally {
@@ -90,32 +115,13 @@ export default function DashboardPage() {
       if (!token) return;
 
       try {
-        const params: any = { period: "week" };
-        if (selectedGoalId) params.goalId = selectedGoalId;
-
-        const res = await api.get("/progress/stats", {
-          headers: { Authorization: `Bearer ${token}` },
-          params,
+        const data = await fetchProgressStatsRequest(token, {
+          period: "week",
+          goalId: selectedGoalId || undefined,
         });
-
-        const data = res.data.data;
-        setCompletionRate(data?.completionRate || 0);
-        setTotalDays(data?.totalDaysTracked || 0);
-
-        // Build progress map from goalBreakdown
-        const breakdown = data?.goalBreakdown || {};
-        const progressMap: Record<string, GoalProgress> = {};
-        
-        Object.keys(breakdown).forEach((goalId) => {
-          const info = breakdown[goalId];
-          progressMap[goalId] = {
-            goalId,
-            todayProgress: info.averageValue || 0,
-            percentComplete: info.completionRate || 0,
-          };
-        });
-
-        setGoalProgressMap(progressMap);
+        setCompletionRate(data.completionRate);
+        setTotalDays(data.totalDaysTracked);
+        setGoalProgressMap(buildProgressMap(data.goalBreakdown));
       } catch (err) {
         console.error("Failed to fetch stats:", err);
       } finally {
@@ -135,16 +141,10 @@ export default function DashboardPage() {
     setIsLogging(true);
 
     try {
-      await api.post(
-        `/progress/${selectedGoal.id}`,
-        {
-          value: parseFloat(logValue),
-          notes: logNotes || undefined,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await logProgressRequest(token, selectedGoal.id, {
+        value: parseFloat(logValue),
+        notes: logNotes || undefined,
+      });
 
       // Close dialog
       setLogDialogOpen(false);
@@ -153,32 +153,13 @@ export default function DashboardPage() {
       setSelectedGoal(null);
 
       // Refresh stats
-      const params: any = { period: "week" };
-      if (selectedGoalId) params.goalId = selectedGoalId;
-
-      const res = await api.get("/progress/stats", {
-        headers: { Authorization: `Bearer ${token}` },
-        params,
+      const data = await fetchProgressStatsRequest(token, {
+        period: "week",
+        goalId: selectedGoalId || undefined,
       });
-
-      const data = res.data.data;
-      setCompletionRate(data?.completionRate || 0);
-      setTotalDays(data?.totalDaysTracked || 0);
-
-      // Update progress map
-      const breakdown = data?.goalBreakdown || {};
-      const progressMap: Record<string, GoalProgress> = {};
-      
-      Object.keys(breakdown).forEach((goalId) => {
-        const info = breakdown[goalId];
-        progressMap[goalId] = {
-          goalId,
-          todayProgress: info.averageValue || 0,
-          percentComplete: info.completionRate || 0,
-        };
-      });
-
-      setGoalProgressMap(progressMap);
+      setCompletionRate(data.completionRate);
+      setTotalDays(data.totalDaysTracked);
+      setGoalProgressMap(buildProgressMap(data.goalBreakdown));
 
       alert("Progress logged successfully!");
     } catch (err) {

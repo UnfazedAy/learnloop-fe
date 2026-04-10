@@ -1,0 +1,805 @@
+openapi: 3.0.0
+info:
+  title: LearnLoop
+  version: 1.0.0
+  description: >-
+    A personal project aimed at keeping individual accountable on their learning
+    journey so as to maintain discipline
+servers:
+  - url: '{{URL}}'
+paths:
+  /api/v1/auth/sign-up:
+    post:
+      summary: Sign up
+      responses:
+        '201':
+          description: Sign up
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '205'
+            ETag:
+              schema:
+                type: string
+              example: W/"cd-wjsyh37ftevbqvJPD4+NRCi+ea8"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 17:14:12 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                gender:
+                  type: string
+            example:
+              firstName: Ayomide
+              lastName: Soniyi
+              email: ayomidesoniyi@gmail.com
+              password: UnfazedAy06!
+              gender: male
+  /api/v1/auth/login:
+    post:
+      summary: Log in
+      responses:
+        '200':
+          description: Log in
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Set-Cookie:
+              schema:
+                type: string
+              example: >-
+                refreshToken=dyyx3cju7str; Max-Age=604800; Path=/; Expires=Wed,
+                27 Aug 2025 18:22:09 GMT; HttpOnly; SameSite=Lax
+            Content-Length:
+              schema:
+                type: integer
+              example: '1129'
+            ETag:
+              schema:
+                type: string
+              example: W/"469-ypnSimJs0MS5AaneEzS6NgGuB4g"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 18:22:09 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Auth
+      description: Logs in with email and password
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+            example:
+              email: ayomidesoniyi@gmail.com
+              password: UnfazedAy06?
+  /api/v1/auth/complete-profile:
+    post:
+      summary: Complete registration
+      responses:
+        '200':
+          description: Complete registration
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '199'
+            ETag:
+              schema:
+                type: string
+              example: W/"c7-hN6L9ZCbbFBSNv1p6CU5uMtFxLI"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 17:17:59 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Auth
+      description: >-
+        This endpoint is meant to be triggered upon clicking on the mail
+        received to verify email
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accessToken:
+                  type: string
+            example:
+              accessToken: >-
+                eyJhbGciOiJIUzI1NiIsImtpZCI6IlJCMjNMQzhibXJSOG9ROFIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2h4eHlzbnZwbWJndGh5bmxhZ2pjLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzOTE4NjQ3OS03ODhjLTQ1ZmUtODQ5NC1kNDdkM2EzYjJmY2QiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzUzMjg3OTkwLCJpYXQiOjE3NTMyODQzOTAsImVtYWlsIjoiYXlvbWlkZXNvbml5aUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoiYXlvbWlkZXNvbml5aUBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZmlyc3RfbmFtZSI6IkF5b21pZGUiLCJnZW5kZXIiOiJtYWxlIiwibGFzdF9uYW1lIjoiU29uaXlpIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiIzOTE4NjQ3OS03ODhjLTQ1ZmUtODQ5NC1kNDdkM2EzYjJmY2QifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc1MzI4NDM5MH1dLCJzZXNzaW9uX2lkIjoiOGYzZWU3NjgtZDBlYy00NTVkLWIwMjMtODgxMTBkZjUwOGJhIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.rWC32e301-tHNkvHVz3VD_Dib1T4KZDvkSfumXxnj6U
+  /api/v1/auth/logout:
+    post:
+      summary: Log out
+      responses: {}
+      tags:
+        - Auth
+      description: Log outs user by invalidating the accessToken and clearing the cookies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+            example:
+              email: ayomidesoniyi@gmail.com
+              password: UnfazedAy06!
+  /api/v1/auth/forgot-password:
+    post:
+      summary: Forgot password
+      responses: {}
+      tags:
+        - Auth
+      description: >-
+        Triggers the process to reset the forgotten account password. It takes
+        in the user email registered with the account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+            example:
+              email: ayomidesoniyi@gmail.com
+  /api/v1/auth/reset-password:
+    post:
+      summary: Reset password
+      parameters:
+        - name: Authorization
+          in: header
+          schema:
+            type: string
+          example: '{{vault:bearer-token}}'
+      responses: {}
+      tags:
+        - Auth
+      description: >-
+        Takes in the new password and updates the user password provided the
+        accessToken in the authorization is still valid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newPassword:
+                  type: string
+                accessToken:
+                  type: string
+                refreshToken:
+                  type: string
+            example:
+              newPassword: UnfazedAy06?
+              accessToken: >-
+                eyJhbGciOiJIUzI1NiIsImtpZCI6IlJCMjNMQzhibXJSOG9ROFIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2h4eHlzbnZwbWJndGh5bmxhZ2pjLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI5ZTI2OGZmYi1jMzM3LTQ5Y2YtYWNlZS1jMDFjNTIxYWJhNWUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzU0MTYxNTU4LCJpYXQiOjE3NTQxNTc5NTgsImVtYWlsIjoiYXlvbWlkZXNvbml5aUBnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoiYXlvbWlkZXNvbml5aUBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZmlyc3RfbmFtZSI6IkF5b21pZGUiLCJnZW5kZXIiOiJtYWxlIiwibGFzdF9uYW1lIjoiU29uaXlpIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiI5ZTI2OGZmYi1jMzM3LTQ5Y2YtYWNlZS1jMDFjNTIxYWJhNWUifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJvdHAiLCJ0aW1lc3RhbXAiOjE3NTQxNTc5NTh9XSwic2Vzc2lvbl9pZCI6ImI0M2VjNGJhLWQxNjMtNDVlYS1iNDRiLTgwNmRjYWM0MmI4ZCIsImlzX2Fub255bW91cyI6ZmFsc2V9.uw16haa9NgdffsqQehktHm1vfOF0EUjN-lUQmaTHHG4
+              refreshToken: wcqds3ohgpxh
+  /api/v1/user/update-profile:
+    put:
+      summary: Edit/Update profile
+      responses: {}
+      tags:
+        - User
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+            example:
+              firstName: Jayeola
+              lastName: Durokifa
+  /api/v1/user/profile:
+    get:
+      summary: Get user profile
+      responses: {}
+      tags:
+        - User
+      description: Gets the user profile
+  /api/v1/user/profiles:
+    get:
+      summary: Get all user profile
+      responses: {}
+      tags:
+        - User
+      description: Gets all user profile
+  /api/v1/user/9e268ffb-c337-49cf-acee-c01c521aba5e:
+    get:
+      summary: Get user profile by Id
+      responses: {}
+      tags:
+        - User
+      description: Pass in the user id and gets the user profile from the DB
+  /api/v1/user/delete-account:
+    delete:
+      summary: Delete account
+      responses: {}
+      tags:
+        - User
+      description: Deletes the user login account
+  /api/v1/user/notification-settings:
+    put:
+      summary: Update notifcation settings
+      responses: {}
+      tags:
+        - User
+      description: Updates the notification preference of the user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: boolean
+            example:
+              email: false
+  /api/v1/goals:
+    post:
+      summary: Create Goal
+      responses:
+        '201':
+          description: Create Goal (200 sucess)
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '457'
+            ETag:
+              schema:
+                type: string
+              example: W/"1c9-7fYqseIi6ycpmSqV1GUU0Dj+oDo"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 19:34:23 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Goals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                goalType:
+                  type: string
+                targetValue:
+                  type: integer
+                targetUnit:
+                  type: string
+                frequency:
+                  type: string
+            example:
+              title: Read 10 pages of a book
+              description: Daily reading habit to improve knowledge
+              goalType: completion
+              targetValue: 10
+              targetUnit: pages
+              frequency: daily
+    get:
+      summary: Get all goals
+      responses:
+        '200':
+          description: Get all goals (200 response)
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '1351'
+            ETag:
+              schema:
+                type: string
+              example: W/"547-hdAwUrMEFV024gq5LzNUJ0oOuPs"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 19:41:51 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Goals
+      description: >-
+        Gets all goals for a logged in users and accepts query parameters such
+        as page, limit and also allows for select and sort based on the
+        frequency and goal type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                goalType:
+                  type: string
+                targetValue:
+                  type: integer
+                targetUnit:
+                  type: string
+                frequency:
+                  type: string
+            example:
+              title: Read 10 pages of a sql books part 2
+              description: Daily reading habit to improve knowledge
+              goalType: completion
+              targetValue: 10
+              targetUnit: pages
+              frequency: daily
+  /api/v1/goals/fad8458f-7a8b-48bf-b3ac-9fb9dd4d2eec:
+    get:
+      summary: Get a single goal by Id
+      responses:
+        '200':
+          description: Get a single goal
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '459'
+            ETag:
+              schema:
+                type: string
+              example: W/"1cb-hfPqPtO+DHKkSi3yTI5r9Tqi194"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 19:40:07 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Goals
+      description: Gets a single goal for user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                goalType:
+                  type: string
+                targetValue:
+                  type: integer
+                targetUnit:
+                  type: string
+                frequency:
+                  type: string
+            example:
+              title: Read 10 pages of a sql books part 2
+              description: Daily reading habit to improve knowledge
+              goalType: completion
+              targetValue: 10
+              targetUnit: pages
+              frequency: daily
+    delete:
+      summary: Delete goal by Id
+      responses:
+        '200':
+          description: Get a single goal
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '459'
+            ETag:
+              schema:
+                type: string
+              example: W/"1cb-hfPqPtO+DHKkSi3yTI5r9Tqi194"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 19:40:07 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+        '201':
+          description: New Request
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '457'
+            ETag:
+              schema:
+                type: string
+              example: W/"1c9-7fYqseIi6ycpmSqV1GUU0Dj+oDo"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 19:34:23 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Goals
+      description: Deletes goals for the active current user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                goalType:
+                  type: string
+                targetValue:
+                  type: integer
+                targetUnit:
+                  type: string
+                frequency:
+                  type: string
+            example:
+              title: Read 10 pages of a sql books part 2
+              description: Daily reading habit to improve knowledge
+              goalType: completion
+              targetValue: 10
+              targetUnit: pages
+              frequency: daily
+  /api/v1/goals/4018c516-3e79-4527-acd5-30983234569c:
+    put:
+      summary: Edit Goal
+      responses:
+        '201':
+          description: Edit Goal(200 success)
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '457'
+            ETag:
+              schema:
+                type: string
+              example: W/"1c9-7fYqseIi6ycpmSqV1GUU0Dj+oDo"
+            Date:
+              schema:
+                type: string
+              example: Wed, 20 Aug 2025 19:34:23 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Goals
+      description: Edit any feild of your goal based on the Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                goalType:
+                  type: string
+                targetValue:
+                  type: integer
+                targetUnit:
+                  type: string
+                frequency:
+                  type: string
+            example:
+              title: Read 10 pages of a book part 3 edit
+              description: Daily reading habit to improve knowledge edit
+              goalType: completion
+              targetValue: 10
+              targetUnit: problems
+              frequency: monthly
+  /api/v1/progress/4018c516-3e79-4527-acd5-30983234569c:
+    post:
+      summary: Log goal progress
+      responses:
+        '200':
+          description: Log goal progress
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '798'
+            ETag:
+              schema:
+                type: string
+              example: W/"31e-nK9KTUufmOm0sQibSfh4zeFegkk"
+            Date:
+              schema:
+                type: string
+              example: Sat, 27 Sep 2025 21:46:24 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Progress
+      description: Log goal progress based on the goal Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: integer
+                notes:
+                  type: string
+            example:
+              value: 3
+              notes: Read 3 pages today
+  /api/v1/progress/stats:
+    get:
+      summary: Progress stats
+      parameters:
+        - name: goalId
+          in: query
+          schema:
+            type: string
+          example: 9b1fc585-90ab-4f7d-bdc4-393235d0173e
+        - name: period
+          in: query
+          schema:
+            type: string
+          example: week
+      responses:
+        '200':
+          description: Progress stats
+          headers:
+            X-Powered-By:
+              schema:
+                type: string
+              example: Express
+            Vary:
+              schema:
+                type: string
+              example: Origin
+            Access-Control-Allow-Credentials:
+              schema:
+                type: boolean
+              example: 'true'
+            Content-Length:
+              schema:
+                type: integer
+              example: '412'
+            ETag:
+              schema:
+                type: string
+              example: W/"19c-6JmLm30yAmVSM1IbQeVADHr5UUM"
+            Date:
+              schema:
+                type: string
+              example: Sat, 29 Nov 2025 16:24:40 GMT
+            Connection:
+              schema:
+                type: string
+              example: keep-alive
+            Keep-Alive:
+              schema:
+                type: string
+              example: timeout=5
+      tags:
+        - Progress

@@ -5,14 +5,32 @@ import { Input } from "@/components/ui/input"
 import { Link } from "react-router-dom"
 import { Mail, ArrowLeft } from "lucide-react"
 import { Navbar } from "@/components/Navbar"
+import { forgotPasswordRequest } from "@/lib/api"
+import { Spinner } from "@/components/ui/spinner"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitted(true)
+    setLoading(true)
+    setError("")
+
+    try {
+      await forgotPasswordRequest(email)
+      setSubmitted(true)
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to send reset link. Please try again."
+      )
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -62,8 +80,10 @@ export default function ForgotPasswordPage() {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-                  Send Reset Link
+                {error && <p className="text-sm text-destructive">{error}</p>}
+
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
+                  {loading ? <Spinner /> : "Send Reset Link"}
                 </Button>
               </form>
             )}

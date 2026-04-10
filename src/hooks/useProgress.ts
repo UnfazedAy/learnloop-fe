@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { api } from "@/lib/axios";
+import { logProgressRequest } from "@/lib/api";
 
 export function useProgress() {
   const [loading, setLoading] = useState(false);
@@ -14,14 +14,7 @@ export function useProgress() {
       
       try {
         setLoading(true);
-        const res = await api.post(
-          `/progress/${goalId}`,
-          { value, notes },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        return res.data;
+        return await logProgressRequest(token, goalId, { value, notes });
       } catch (err) {
         console.error("Failed to log progress:", err)
         return null

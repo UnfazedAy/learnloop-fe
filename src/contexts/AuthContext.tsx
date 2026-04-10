@@ -6,6 +6,11 @@ import {
   type ReactNode,
 } from "react";
 import { api } from "@/lib/axios";
+import {
+  completeProfile as completeProfileRequest,
+  fetchProfile,
+  logoutRequest,
+} from "@/lib/api";
 import { Gender } from "@/types/index";
 import { jwtDecode } from "jwt-decode";
 interface User {
@@ -42,12 +47,6 @@ interface LoginResponse {
   data: { accessToken: string };
 }
 
-interface ProfileResponse {
-  success: boolean;
-  message: string;
-  data: User;
-}
-
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -55,7 +54,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (newUser: Omit<UserCreate, "id"> & { password: string }) => Promise<any>;
   completeRegistration: (accessToken: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   getToken: () => string | null;
   refreshUser: () => Promise<void>;
 }
@@ -127,11 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       localStorage.setItem("learnloop_token", accessToken);
 
-      const profileRes = await api.get<ProfileResponse>("/user/profile", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      const profile = profileRes.data.data;
+      const profile = await fetchProfile(accessToken);
       localStorage.setItem("learnloop_user", JSON.stringify(profile));
       setUser(profile);
       dispatchAuthChange();
@@ -164,13 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const completeRegistration = async (accessToken: string) => {
     setError(null);
     try {
-      const res = await api.post<ProfileResponse>(
-        "/auth/complete-profile",
-        {},
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-
-      const profile = res.data.data;
+      const profile = await completeProfileRequest(accessToken);
       localStorage.setItem("learnloop_token", accessToken);
       localStorage.setItem("learnloop_user", JSON.stringify(profile));
       setUser(profile);
@@ -185,7 +174,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const token = getToken();
+
+    try {
+      await logoutRequest(token);
+    } catch (err) {
+      console.error("Failed to log out from backend:", err);
+    }
+
     localStorage.removeItem("learnloop_user");
     localStorage.removeItem("learnloop_token");
     setUser(null);
@@ -195,18 +192,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const getToken = () => localStorage.getItem("learnloop_token");
 
   const refreshUser = async () => {
-  const token = getToken()
-  if (!token) return
+    const token = getToken();
+    if (!token) return;
 
-  const res = await api.get("/user/profile", {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  const profile = res.data.data
-  localStorage.setItem("learnloop_user", JSON.stringify(profile))
-  setUser(profile)
-  dispatchAuthChange()
-}
+    const profile = await fetchProfile(token);
+    localStorage.setItem("learnloop_user", JSON.stringify(profile));
+    setUser(profile);
+    dispatchAuthChange();
+  };
 
   return (
     <AuthContext.Provider

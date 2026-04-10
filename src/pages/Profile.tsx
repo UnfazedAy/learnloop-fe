@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Bell, Lock, LogOut } from "lucide-react"
-import { api } from "@/lib/axios"
+import { fetchProfile, updateProfileRequest } from "@/lib/api"
 import { Avatar } from "@/components/Avatar"
 import { ToastContainer, toast } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
@@ -17,12 +17,17 @@ export default function ProfilePage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [profile, setProfile] = useState({
+  const [profile, setProfile] = useState<{
+    first_name: string
+    last_name: string
+    email: string
+    gender: string
+    image?: string
+  }>({
     first_name: "",
     last_name: "",
     email: "",
     gender: "",
-    image: "",
   })
 
   useEffect(() => {
@@ -31,18 +36,12 @@ export default function ProfilePage() {
       return
     }
 
-    const fetchProfile = async () => {
+    const loadProfile = async () => {
       try {
         const token = getToken()
         if (!token) return navigate("/login")
 
-        const res = await api.get("/user/profile", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (res.data.success) {
-          setProfile(res.data.data)
-        }
+        setProfile(await fetchProfile(token))
       } catch (err) {
         console.error("Failed to fetch profile:", err)
       } finally {
@@ -50,7 +49,7 @@ export default function ProfilePage() {
       }
     }
 
-    fetchProfile()
+    loadProfile()
   }, [user, getToken, navigate])
 
   if (loading) return null
@@ -65,17 +64,11 @@ export default function ProfilePage() {
     try {
       const token = getToken()
       if (!token) return navigate("/login")
-      const res = await api.put(
-        "/user/update-profile",
-        {
-          firstName: profile.first_name,
-          lastName: profile.last_name,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      )
-      if (res.data.success) {
+      const res = await updateProfileRequest(token, {
+        firstName: profile.first_name,
+        lastName: profile.last_name,
+      })
+      if (res.success) {
         await refreshUser()
         toast.success("Profile updated successfully!")
       }
