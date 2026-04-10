@@ -751,6 +751,38 @@ paths:
             example:
               value: 3
               notes: Read 3 pages today
+  /api/v1/progress:
+    get:
+      summary: Get progress entries
+      parameters:
+        - name: goalId
+          in: query
+          schema:
+            type: string
+          example: 9b1fc585-90ab-4f7d-bdc4-393235d0173e
+        - name: page
+          in: query
+          schema:
+            type: integer
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          example: 10
+        - name: dateRange
+          in: query
+          schema:
+            type: string
+          example: month
+      responses:
+        '200':
+          description: Progress entries retrieved successfully
+      tags:
+        - Progress
+      description: >-
+        Returns paginated progress entries for the authenticated user and
+        supports filtering by goal and date range.
   /api/v1/progress/stats:
     get:
       summary: Progress stats
@@ -803,3 +835,7 @@ paths:
               example: timeout=5
       tags:
         - Progress
+      description: >-
+        Returns aggregate progress stats and per-goal breakdown data including
+        currentPeriodProgress, currentProgressPercentage, remainingToTarget,
+        currentPeriodStart, and currentPeriodEnd for each goal.

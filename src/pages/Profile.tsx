@@ -8,8 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Bell, Lock, LogOut } from "lucide-react"
 import { fetchProfile, updateProfileRequest } from "@/lib/api"
 import { Avatar } from "@/components/Avatar"
-import { ToastContainer, toast } from "react-toastify"
-import "react-toastify/dist/ReactToastify.css"
+import { toast } from "sonner"
 
 export default function ProfilePage() {
   const { user, getToken, logout, refreshUser } = useAuth()
@@ -83,7 +82,6 @@ export default function ProfilePage() {
   return (
     <>
       <Navbar user={profile} onLogout={handleLogout} />
-      <ToastContainer position="top-right" autoClose={3000} />
 
       <div className="min-h-screen bg-background">
 

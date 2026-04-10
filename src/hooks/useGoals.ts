@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import type { Goal } from "@/types/index"
+import type { Goal } from "@/types"
 import {
   createGoalRequest,
   deleteGoalRequest,
@@ -13,9 +13,10 @@ export function useGoals() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // FETCH GOALS FROM API
   const fetchGoals = useCallback(async () => {
     const token = getToken()
+    setError(null)
+
     if (!token) {
       setGoals([])
       setLoading(false)
@@ -26,15 +27,19 @@ export function useGoals() {
       setLoading(true)
       setGoals(await fetchGoalsRequest(token))
     } catch (err) {
+      setGoals([])
       setError("Failed to load goals")
     } finally {
       setLoading(false)
     }
   }, [getToken])
 
-  // ADD GOAL TO API
-  const addGoal = useCallback(async (goalData: Omit<Goal, "id" | "user_id" | "created_at" | "updated_at" | "is_active">) => {
+  const addGoal = useCallback(async (
+    goalData: Omit<Goal, "id" | "user_id" | "created_at" | "updated_at" | "is_active">
+  ) => {
     const token = getToken()
+    setError(null)
+
     if (!token) {
       setError("You need to be logged in to add a goal")
       return null
@@ -58,9 +63,10 @@ export function useGoals() {
     }
   }, [getToken])
 
-  // DELETE GOAL FROM API
   const deleteGoal = useCallback(async (id: string) => {
     const token = getToken()
+    setError(null)
+
     if (!token) {
       setError("You need to be logged in to delete a goal")
       return
@@ -68,15 +74,56 @@ export function useGoals() {
 
     try {
       await deleteGoalRequest(token, id)
-      setGoals((prev) => prev.filter((g) => g.id !== id))
+      setGoals((prev) => prev.filter((goal) => goal.id !== id))
     } catch (err) {
       setError("Failed to delete goal")
     }
   }, [getToken])
 
   useEffect(() => {
-    fetchGoals()
-  }, [fetchGoals])
+    let ignore = false
 
-  return { goals, loading, error, addGoal, deleteGoal }
+    const loadGoals = async () => {
+      const token = getToken()
+
+      if (!token) {
+        if (!ignore) {
+          setGoals([])
+          setError(null)
+          setLoading(false)
+        }
+        return
+      }
+
+      try {
+        if (!ignore) {
+          setLoading(true)
+          setError(null)
+        }
+
+        const nextGoals = await fetchGoalsRequest(token)
+
+        if (!ignore) {
+          setGoals(nextGoals)
+        }
+      } catch (err) {
+        if (!ignore) {
+          setGoals([])
+          setError("Failed to load goals")
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadGoals()
+
+    return () => {
+      ignore = true
+    }
+  }, [getToken])
+
+  return { goals, loading, error, addGoal, deleteGoal, refetchGoals: fetchGoals }
 }

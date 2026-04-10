@@ -41,29 +41,95 @@ type ProgressStatsResponse = {
   goalBreakdown?: Record<
     string,
     {
+      goalTitle?: string;
+      targetValue?: number;
+      targetUnit?: string;
+      frequency?: string;
       averageValue?: number;
       average_value?: number;
       completionRate?: number;
       completion_rate?: number;
+      currentPeriodProgress?: number;
+      current_period_progress?: number;
+      currentProgressPercentage?: number;
+      current_progress_percentage?: number;
+      remainingToTarget?: number;
+      remaining_to_target?: number;
+      currentPeriodStart?: string;
+      current_period_start?: string;
+      currentPeriodEnd?: string;
+      current_period_end?: string;
     }
   >;
   goal_breakdown?: Record<
     string,
     {
+      goalTitle?: string;
+      targetValue?: number;
+      targetUnit?: string;
+      frequency?: string;
       averageValue?: number;
       average_value?: number;
       completionRate?: number;
       completion_rate?: number;
+      currentPeriodProgress?: number;
+      current_period_progress?: number;
+      currentProgressPercentage?: number;
+      current_progress_percentage?: number;
+      remainingToTarget?: number;
+      remaining_to_target?: number;
+      currentPeriodStart?: string;
+      current_period_start?: string;
+      currentPeriodEnd?: string;
+      current_period_end?: string;
     }
   >;
+};
+
+type ApiProgressEntry = {
+  id: string;
+  goal_id: string;
+  date: string;
+  value: number;
+  notes?: string | null;
+  created_at: string;
+  updated_at?: string;
+  goals?: {
+    id: string;
+    title: string;
+    goal_type: string;
+    target_value: number;
+    target_unit: string;
+    frequency?: string;
+  };
+};
+
+type PaginatedApiResponse<T> = ApiResponse<T> & {
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
 };
 
 export type Profile = ApiProfile;
 
 export type GoalBreakdownItem = {
   goalId: string;
+  goalTitle: string;
+  targetValue: number;
+  targetUnit: string;
+  frequency: string;
   averageValue: number;
   completionRate: number;
+  currentPeriodProgress: number;
+  currentProgressPercentage: number;
+  remainingToTarget: number;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
 };
 
 export type ProgressStats = {
@@ -71,6 +137,23 @@ export type ProgressStats = {
   totalDaysTracked: number;
   totalEntries: number;
   goalBreakdown: Record<string, GoalBreakdownItem>;
+};
+
+export type ProgressEntry = {
+  id: string;
+  goalId: string;
+  date: string;
+  value: number;
+  notes?: string;
+  createdAt: string;
+  goal?: {
+    id: string;
+    title: string;
+    goalType: string;
+    targetValue: number;
+    targetUnit: string;
+    frequency?: string;
+  };
 };
 
 export const getAuthConfig = (token: string): AxiosRequestConfig => ({
@@ -196,6 +279,38 @@ export const logProgressRequest = async (
   return unwrap(response);
 };
 
+export const fetchProgressEntriesRequest = async (
+  token: string,
+  params: { goalId?: string; limit?: number; page?: number; dateRange?: string }
+) => {
+  const response = await api.get<PaginatedApiResponse<ApiProgressEntry[]>>(
+    "/progress",
+    {
+      ...getAuthConfig(token),
+      params,
+    }
+  );
+
+  return (response.data.data || []).map((entry) => ({
+    id: entry.id,
+    goalId: entry.goal_id,
+    date: entry.date,
+    value: entry.value,
+    notes: entry.notes || undefined,
+    createdAt: entry.created_at,
+    goal: entry.goals
+      ? {
+          id: entry.goals.id,
+          title: entry.goals.title,
+          goalType: entry.goals.goal_type,
+          targetValue: entry.goals.target_value,
+          targetUnit: entry.goals.target_unit,
+          frequency: entry.goals.frequency,
+        }
+      : undefined,
+  }));
+};
+
 export const fetchProgressStatsRequest = async (
   token: string,
   params: { goalId?: string; period: string }
@@ -216,8 +331,26 @@ export const fetchProgressStatsRequest = async (
       goalId,
       {
         goalId,
+        goalTitle: item.goalTitle ?? "",
+        targetValue: item.targetValue ?? 0,
+        targetUnit: item.targetUnit ?? "",
+        frequency: item.frequency ?? "",
         averageValue: item.averageValue ?? item.average_value ?? 0,
         completionRate: item.completionRate ?? item.completion_rate ?? 0,
+        currentPeriodProgress:
+          item.currentPeriodProgress ?? item.current_period_progress ?? 0,
+        currentProgressPercentage:
+          item.currentProgressPercentage ??
+          item.current_progress_percentage ??
+          item.completionRate ??
+          item.completion_rate ??
+          0,
+        remainingToTarget:
+          item.remainingToTarget ?? item.remaining_to_target ?? 0,
+        currentPeriodStart:
+          item.currentPeriodStart ?? item.current_period_start ?? "",
+        currentPeriodEnd:
+          item.currentPeriodEnd ?? item.current_period_end ?? "",
       },
     ])
   ) as Record<string, GoalBreakdownItem>;
